@@ -8,6 +8,9 @@ try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } 
 function isTR() { return root.getAttribute('data-lang') === 'tr'; }
 function L(en, tr) { return isTR() ? tr : en; }
 function fmt(n) { return Math.round(n).toLocaleString(isTR() ? 'tr-TR' : 'en-US'); }
+/* Turkish is available only while the language switch is visible (remove [hidden] from .lang in index.html). */
+var langSwitch = document.querySelector('.lang');
+var MULTI_LANG = !!(langSwitch && !langSwitch.hidden);
 function i18n(scope, key) {
   var el = scope && scope.querySelector('.hidden-i18n [data-k="' + key + '"]');
   if (!el) return key;
@@ -43,7 +46,7 @@ var ACH = [
   { id: 'expl', en: 'Explorer', tr: 'Kâşif', den: 'Visit every section', dtr: 'Her bölümü ziyaret et', t: function () { return ['levels', 'games', 'clips', 'path', 'contact'].every(function (s) { return S.done['sec:' + s]; }); } },
   { id: 'bil', en: 'Bilingual', tr: 'İki dilli', den: 'Switch the language', dtr: 'Dili değiştir', t: function () { return !!S.done.lang; } },
   { id: 'scout', en: 'Talent scout', tr: 'Yetenek avcısı', den: 'Copy my email or open LinkedIn', dtr: 'E-postamı kopyala ya da LinkedIn\'i aç', t: function () { return cnt('contact:') >= 1; } }
-];
+].filter(function (a) { return MULTI_LANG || a.id !== 'bil'; });
 
 /* ---------------- feedback ---------------- */
 var toastBox = $('#toasts');
@@ -224,7 +227,7 @@ $$('dialog.dlg').forEach(function (d) {
 });
 function route() {
   var h = decodeURIComponent(location.hash.slice(1));
-  if (h === 'tr' || h === 'en') { setLang(h, false); return; }
+  if (h === 'tr' || h === 'en') { if (MULTI_LANG) setLang(h, false); return; }
   var d = h && document.getElementById(h);
   if (d && d.tagName === 'DIALOG') openDlg(h);
 }
@@ -250,6 +253,11 @@ function gameFilter(tag) {
   return n;
 }
 $$('[data-gf]').forEach(function (b) { b.addEventListener('click', function () { gameFilter(b.getAttribute('data-gf')); if (b.getAttribute('data-gf') !== 'all') award('filter', 15, b); }); });
+// the page editor fires this after adding, removing or changing a game
+document.addEventListener('yb:games', function (e) {
+  var on = $('.filters [data-gf][aria-pressed="true"]');
+  gameFilter((e.detail && e.detail.filter) || (on && on.getAttribute('data-gf')) || 'all');
+});
 
 /* ---------------- skills ---------------- */
 $$('[data-skill]').forEach(function (b) {
@@ -269,7 +277,8 @@ $$('video[data-clip]').forEach(function (v) { v.addEventListener('play', functio
 /* ---------------- contact ---------------- */
 $$('[data-copy-mail]').forEach(function (btn) {
   btn.addEventListener('click', function () {
-    var mail = 'yagmurbaran@windowslive.com';
+    var shown = btn.parentNode.querySelector('.mail');
+    var mail = (shown && shown.textContent.trim()) || 'yagmurbaran@windowslive.com';
     var ok = function () {
       award('contact:mail', 30, btn);
       var en = btn.querySelector('.en'), tr = btn.querySelector('.tr'); if (!en) return;
@@ -507,8 +516,10 @@ $$('[data-tool="gddt"] details').forEach(function (d) { d.addEventListener('togg
 
 /* ---------------- init ---------------- */
 var lang = 'en';
-try { var sv = localStorage.getItem('yb-lang'); if (sv === 'tr' || sv === 'en') lang = sv; } catch (e) {}
-var h0 = location.hash.slice(1); if (h0 === 'tr' || h0 === 'en') lang = h0;
+if (MULTI_LANG) {
+  try { var sv = localStorage.getItem('yb-lang'); if (sv === 'tr' || sv === 'en') lang = sv; } catch (e) {}
+  var h0 = location.hash.slice(1); if (h0 === 'tr' || h0 === 'en') lang = h0;
+}
 $$('[data-set-lang]').forEach(function (b) { b.addEventListener('click', function () { var l = b.getAttribute('data-set-lang'); if (l !== root.getAttribute('data-lang')) setLang(l, true); }); });
 setLang(lang, false);
 checkAch();

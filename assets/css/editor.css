@@ -1,0 +1,91 @@
+/* Page editor UI (owner only). Loaded by assets/js/editor.js; not part of the published site.
+   Outlines are used instead of borders so editing never moves the layout. */
+
+/* ---------- editable text ---------- */
+.yb-editing [data-yb-t] { outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; border-radius: 2px; }
+.yb-editing [data-yb-t="text"] { cursor: text; -webkit-user-select: text; user-select: text; }
+.yb-editing [data-yb-t="ctl"] { cursor: pointer; }
+.yb-editing [data-yb-t]:hover { outline-color: var(--accent); }
+.yb-editing [data-yb-t].yb-dirty { outline: 1px solid var(--gold); }
+.yb-editing [data-yb-t]:focus { outline: 2px solid var(--accent); }
+.yb-editing [data-yb-t="text"]:empty { display: inline-block; min-width: 2em; min-height: 1em; }
+
+/* ---------- games ---------- */
+.yb-editing .gtiles .gt, .yb-editing .gfeatured .gcard { outline: 1px dashed color-mix(in srgb, var(--gold) 75%, transparent); outline-offset: 2px; cursor: pointer; }
+.yb-editing .gtiles .gt:hover, .yb-editing .gfeatured .gcard:hover, .yb-editing .yb-picked { outline: 2px solid var(--gold); }
+.yb-editing .gstudio.empty { display: grid; }
+.yb-add, .yb-studio-x { display: none; }
+.yb-editing .yb-add {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font: 500 .82rem/1.2 var(--font-body); color: var(--ink); background: transparent;
+  border: 1px dashed var(--gold); border-radius: 10px; padding: 6px 10px; cursor: pointer;
+}
+.yb-editing .yb-add:hover { background: var(--gold-soft); }
+.yb-editing .yb-add-card { border-radius: 14px; min-height: 96px; }
+.yb-editing .yb-add-studio { justify-self: start; padding: 8px 14px; }
+.yb-editing .yb-studio-x {
+  display: inline-block; margin-top: 6px; padding: 0; border: 0; background: none; cursor: pointer;
+  font: 500 .74rem/1.3 var(--font-body); color: var(--warn); text-decoration: underline; text-underline-offset: 2px; text-align: left;
+}
+
+/* game-system noise is muted while editing */
+.yb-editing .toasts, .yb-editing .fxp { display: none !important; }
+
+/* ---------- shared controls ---------- */
+.yb-btn {
+  display: inline-flex; align-items: center; gap: 6px; font: 600 .8rem/1 var(--font-body);
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  padding: 8px 12px; border-radius: 99px; cursor: pointer; text-decoration: none; white-space: nowrap;
+}
+.yb-btn:hover { border-color: var(--accent); }
+.yb-btn:disabled { opacity: .55; cursor: default; }
+.yb-btn.yb-primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.yb-btn.yb-gold { background: var(--gold); border-color: var(--gold); color: #1b1404; }
+.yb-btn.yb-danger { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.yb-btn.yb-small { justify-self: start; padding: 6px 10px; font-size: .76rem; }
+.yb-x { border: 0; background: transparent; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; padding: 6px; border-radius: 6px; }
+.yb-x:hover { color: var(--ink); background: var(--surface); }
+.yb-ed :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- bar ---------- */
+.yb-bar {
+  position: fixed; z-index: 60;
+  right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  max-width: calc(100vw - 24px); display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+  padding: 8px; font: 500 .82rem/1.3 var(--font-body);
+}
+.yb-status { color: var(--muted); font-size: .8rem; padding-inline: 4px; }
+.yb-status.err { color: var(--warn); }
+
+/* ---------- popover and game panel ---------- */
+.yb-pop, .yb-panel {
+  position: fixed; z-index: 61; display: grid; gap: 12px;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+  padding: 14px; font: .86rem/1.4 var(--font-body);
+}
+.yb-pop { width: min(340px, calc(100vw - 24px)); }
+.yb-panel {
+  top: calc(env(safe-area-inset-top, 0px) + 64px); right: max(12px, env(safe-area-inset-right, 0px));
+  width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 150px); overflow: auto; overscroll-behavior: contain;
+}
+.yb-ph { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.yb-ph b { font: 600 1rem/1.2 var(--font-display); }
+.yb-f { display: grid; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; font-size: .76rem; color: var(--muted); }
+.yb-f legend { padding: 0; margin-bottom: 6px; }
+.yb-f input[type="text"], .yb-f input[type="url"], .yb-f textarea, .yb-link input {
+  width: 100%; min-width: 0; font: .9rem/1.4 var(--font-body); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px;
+}
+.yb-f textarea { resize: vertical; }
+.yb-f input:focus, .yb-f textarea:focus, .yb-link input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.yb-hint { font-size: .72rem; }
+.yb-links { display: grid; gap: 6px; }
+.yb-link { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr) auto; gap: 6px; align-items: center; }
+.yb-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.yb-tags label { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--ink); background: var(--surface); border-radius: 99px; padding: 5px 10px; cursor: pointer; }
+.yb-tags input { accent-color: var(--accent); margin: 0; }
+.yb-err { margin: 0; color: var(--warn); font-size: .8rem; }
+.yb-err:empty { display: none; }
+.yb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.yb-sp { flex: 1; }

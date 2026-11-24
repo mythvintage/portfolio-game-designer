@@ -460,6 +460,8 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 @media (max-width: 900px) { .levels { grid-template-columns: minmax(0, 1fr); } }
 .chiprow { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { background: var(--surface); border-color: transparent; }
+/* card and level chips may wrap if their text grows longer than the card */
+.gcard .chip, .chiprow .chip { white-space: normal; max-width: 100%; }
 
 /* ---------- dialogs ---------- */
 dialog.dlg {
