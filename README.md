@@ -14,7 +14,9 @@ Oynanabilir bir oyun tasarımcısı portfolyosu: XP, seviyeler, görevler ve ba�
 │   ├── js/editor.js           # Sahibine özel düzenleme modu (yayından önce kapatılacak)
 │   ├── video/                 # Oynanış videoları (.mp4)
 │   └── img/                   # Video kapak görselleri (.jpg)
-└── tools/artifact_sync.py     # index.html ↔ claude.ai artifact dönüşümü
+└── tools/
+    ├── artifact_sync.py       # index.html ↔ claude.ai artifact dönüşümü
+    └── convert_clips.py       # Drive linkli klipleri oynatılabilir videoya çevirir
 ```
 
 ## Yerelde çalıştırma
@@ -38,7 +40,16 @@ Düzenleme modunda:
 - **Metinler:** kesikli çerçeveli her metne tıklayıp yazabilirsin. Enter ya da Esc düzenlemeyi bitirir. Yapıştırılan metin düz yazı olarak girer. Satırlar metin uzadıkça uzar, sütun yerleşimi değişmez.
 - **Düğme ve linkler:** üzerine tıklayınca küçük bir pencere açılır. Buradan yazıyı, dış linklerde adresi değiştirebilirsin. "Go there / Open link / Press button" düğmenin asıl işini yapar (ör. bir seviyeyi açar).
 - **Oyunlar:** bir oyuna tıklayınca adını, açıklamasını, linkini ve hangi filtrelerde görüneceğini düzenleyebilir ya da oyunu çıkarabilirsin. Öne çıkan oyun kartlarında stüdyo etiketi, tür etiketi ve birden fazla link (App Store, Google Play…) var. **+ Add game**, **+ Add featured game** ve **+ Add studio** yeni kayıt ekler; **Remove studio** stüdyoyu oyunlarıyla birlikte çıkarır.
+- **Klipler:** telefon mockup'ına tıklayınca başlığı, üstteki etiketi (ör. "Tosby Games · 2022"), açıklamayı ve videonun **Google Drive linkini** düzenleyebilir ya da klibi çıkarabilirsin. **+ Add clip** istediğin kadar yeni mockup ekler; mockup'lar ikişer ikişer alt alta dizilir.
 - **Preview** çerçeveleri gizleyip sayfayı normal haliyle gösterir; **Discard** kaydedilmemiş değişiklikleri atar.
+
+### Drive videoları nasıl oynatılabilir hale gelir
+
+1. Drive'da videoyu **Paylaş → Genel erişim: Bağlantıya sahip olan herkes** yap, **Bağlantıyı kopyala**.
+2. Editörde klibe tıklayıp linki yapıştır, **Save**. Klip "Drive link added" olarak bekler.
+3. Claude `python3 tools/convert_clips.py` ile videoyu indirir, mockup için sıkıştırır (H.264 MP4, en fazla 720×1280), kapak görselini çıkarır ve videoyu klibin içine yerleştirir. Dosyalar `assets/video/<klip>.mp4` ve `assets/img/<klip>-poster.jpg` olur; Drive linki klipte kaynak olarak kalır.
+
+Dikey (9:16) videolar telefonu doldurur; yatay videolar üstte ve altta siyah bantla tamamen görünür.
 
 Düzenlenemeyen yerler: oyun sistemi metinleri (görevler, başarımlar, seviye adları; `assets/js/main.js` içinde), veriden çizilen grafiklerin değerleri ve videolar. Bunlar için değişikliği Claude'a söylemek yeterli.
 

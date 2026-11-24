@@ -66,7 +66,7 @@ if (resume && resume.dlg && !location.hash) { try { history.replaceState(null, '
 // the hidden Turkish copies, and the games list (edited through the game panel).
 var SKIP = 'script,style,title,svg,video,select,option,input,textarea,.tr,.xpbtn,.lang,#questPanel,.quests,' +
   '.qc-foot,.state,.gfeatured,.gtiles,.axis,.ticks,.cells,.marks,.bar-row .val,.rrow .val,.calc-out b,#skillOut,' +
-  '.dlg-bar .close,#toasts,.meter,.readbar,.flow .arrow,.yb-ed';
+  '.dlg-bar .close,#toasts,.meter,.readbar,.flow .arrow,.cliplist .phone,.yb-ed';
 var HOOKS = '[data-lv],[data-lvname],[data-nextlv],[data-xpnow],[data-xpnext],[data-achn],[data-gn]';
 var leaves = [];
 function ownText(el) { for (var n = el.firstChild; n; n = n.nextSibling) if (n.nodeType === 3 && /\S/.test(n.nodeValue)) return true; return false; }
@@ -92,7 +92,7 @@ function setLeafEditable(el, on) {
   if (on) { el.contentEditable = plainOK ? 'plaintext-only' : 'true'; } else el.removeAttribute('contenteditable');
 }
 function markText(el) { if (!dirtyText.has(el)) { dirtyText.add(el); el.classList.add('yb-dirty'); } renderBar(); }
-function gamesChanged() { structural++; doc.dispatchEvent(new CustomEvent('yb:games')); renderBar(); }
+function gamesChanged() { structural++; doc.dispatchEvent(new CustomEvent('yb:games')); renderClipStates(); renderBar(); }
 
 /* ---------- build the saved document ---------- */
 function commit() {
@@ -173,6 +173,7 @@ function setEditing(on) {
   leaves.forEach(function (el) { setLeafEditable(el, on); });
   if (on) { addGameControls(); doc.dispatchEvent(new CustomEvent('yb:games', { detail: { filter: 'all' } })); }
   else { closePop(); closePanel(); if (doc.activeElement && doc.activeElement.blur) doc.activeElement.blur(); }
+  renderClipStates();
   statusNote = '';
   renderBar();
 }
@@ -247,8 +248,8 @@ doc.addEventListener('click', function (e) {
   var t = e.target;
   if (!(t instanceof Element) || t.closest('.yb-ed')) return;
   if (pop && !pop.hidden) closePop();
-  var game = t.closest('.gfeatured .gcard, .gtiles .gt');
-  if (game) { e.preventDefault(); e.stopPropagation(); openPanel({ el: game }); return; }
+  var game = t.closest('.gfeatured .gcard, .gtiles .gt, .cliplist .phone');
+  if (game) { e.preventDefault(); e.stopPropagation(); openPanel({ el: game.classList.contains('phone') ? game.closest('.clip') : game }); return; }
   var leaf = t.closest('[data-yb-t]');
   if (!leaf) return;
   if (leaf.getAttribute('data-yb-t') === 'ctl') { e.preventDefault(); e.stopPropagation(); openPop(leaf); return; }
@@ -371,15 +372,71 @@ function cardHTML(m) {
     (m.links.length ? '<div class="glinks">' + m.links.map(function (l) { return '<a ' + linkAttrs(l.href) + '>' + esc(l.label) + ' ↗</a>'; }).join('') + '</div>' : '') +
     '</div>';
 }
+/* clips: a phone mockup with a video (or an empty screen) and its texts.
+   data-drive keeps the Google Drive link; data-pending marks a link Claude has not turned into a video yet. */
+function readClip(el) {
+  var v = $('.phone video', el), tv = v && twin.get(v), pen = $(':scope > p.en', el), ptr = $(':scope > p.tr', el);
+  return {
+    kind: 'clip', id: el.id, name: oneLine(($('h3', el) || {}).textContent), label: oneLine(($('.s', el) || {}).textContent),
+    desc: pen ? oneLine(pen.textContent) : '', descTr: ptr ? ptr.textContent : null,
+    video: tv ? serialize(tv) : (v ? v.outerHTML : ''), drive: el.getAttribute('data-drive') || '', pending: el.hasAttribute('data-pending'),
+    tags: []
+  };
+}
+function clipHTML(m) {
+  var video = m.video ? m.video.replace(/aria-label="[^"]*"/, 'aria-label="' + esc(m.name) + ' gameplay"') : '<span class="phone-empty" aria-hidden="true"></span>';
+  return '<div class="clip" id="' + esc(m.id) + '"' + (m.drive ? ' data-drive="' + esc(m.drive) + '"' : '') + (m.pending ? ' data-pending=""' : '') + '>\n' +
+    '  <div class="phone">' + video + '</div>\n' +
+    '  <div>' + (m.label ? '<span class="s">' + esc(m.label) + '</span>' : '') + '<h3>' + esc(m.name) + '</h3></div>\n' +
+    (m.desc ? '  <p class="en">' + esc(m.desc) + '</p>' + (m.descTr != null ? '<p class="tr">' + esc(m.descTr) + '</p>' : '') + '\n' : '') +
+    '</div>';
+}
+function slugify(s) {
+  var map = { 'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u' };
+  return String(s).toLocaleLowerCase('tr').replace(/[çğıöşü]/g, function (c) { return map[c]; })
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'clip';
+}
+function freeClipId(name) {
+  var base = 'clip-' + slugify(name), id = base, i = 2;
+  while (doc.getElementById(id)) id = base + '-' + i++;
+  return id;
+}
+function driveFileId(u) {
+  if (!/^https:\/\/(drive|docs)\.google\.com\//i.test(u)) return null;
+  var m = /\/d\/([\w-]{10,})/.exec(u) || /[?&]id=([\w-]{10,})/.exec(u);
+  return m ? m[1] : null;
+}
+function renderClipStates() {
+  $$('.yb-clipstate').forEach(function (s) { s.remove(); });
+  if (!editing) return;
+  $$('.cliplist .clip').forEach(function (c) {
+    var hasVideo = !!$('.phone video', c), pending = c.hasAttribute('data-pending');
+    var msg = pending ? 'Drive link added. Claude will turn it into a playable video.'
+      : (hasVideo ? '✎ Edit clip' : 'Click to add a Google Drive video link');
+    var tag = fromHTML(doc, '<span class="yb-ed yb-clipstate' + (pending || !hasVideo ? ' on' : '') + '"></span>');
+    tag.textContent = msg;
+    var phone = $('.phone', c); if (phone) phone.appendChild(tag);
+  });
+}
+
 function insertLive(container, el, before) { container.insertBefore(el, before || null); }
 function putGame(html, oldLive, container) {
   var live = fromHTML(doc, html), copy = fromHTML(inert, html);
   if (oldLive) { var oc = twin.get(oldLive); oldLive.replaceWith(live); if (oc) oc.replaceWith(copy); }
-  else { insertLive(container, live, $(':scope > .yb-add', container)); twin.get(container).appendChild(copy); }
+  else {
+    insertLive(container, live, $(':scope > .yb-add', container));
+    var tc = twin.get(container); tc.appendChild(copy);
+    if (live.classList.contains('clip')) tc.appendChild(inert.createTextNode('\n'));   // one clip per line, like the rest of the file
+  }
   pair(live, copy);
+  if (live.classList.contains('clip')) scan(live);    // its title, label and description are editable in place too
   return live;
 }
-function removeGame(el) { var c = twin.get(el); el.remove(); if (c) c.remove(); }
+function removeGame(el) {
+  var c = twin.get(el);
+  if (c && c.nextSibling && c.nextSibling.nodeType === 3 && el.classList.contains('clip')) c.nextSibling.remove();
+  el.remove(); if (c) c.remove();
+}
 
 var STUDIO_HTML = '<div class="gstudio"><div><h4>New studio</h4><div class="y">Years · <span class="en">Your role</span></div></div><div class="gtiles"></div></div>';
 function addStudio(btn) {
@@ -404,6 +461,8 @@ function addGameControls() {
   if (feat) feat.appendChild(fromHTML(doc, '<button type="button" class="yb-ed yb-add yb-add-card" data-add="card">+ Add featured game</button>'));
   var list = $('.gstudios');
   if (list) list.appendChild(fromHTML(doc, '<button type="button" class="yb-ed yb-add yb-add-studio" data-add="studio">+ Add studio</button>'));
+  var clips = $('.cliplist');
+  if (clips) clips.appendChild(fromHTML(doc, '<button type="button" class="yb-ed yb-add yb-add-clip" data-add="clip">+ Add clip</button>'));
 }
 doc.addEventListener('click', function (e) {
   if (!editing || !(e.target instanceof Element)) return;
@@ -432,13 +491,17 @@ function buildPanel() {
   panel = fromHTML(doc, '<div class="yb-ed yb-panel" role="dialog" aria-labelledby="ybPanelT" hidden>' +
     '<div class="yb-ph"><b id="ybPanelT">Edit game</b><button type="button" class="yb-x" data-act="cancel" aria-label="Close">✕</button></div>' +
     '<label class="yb-f" for="ybStudio" data-k="card">Studio label<input id="ybStudio" type="text" autocomplete="off" placeholder="Rune Games"></label>' +
-    '<label class="yb-f" for="ybName">Game name<input id="ybName" type="text" autocomplete="off"></label>' +
+    '<label class="yb-f" for="ybName"><span id="ybNameL">Game name</span><input id="ybName" type="text" autocomplete="off"></label>' +
+    '<label class="yb-f" for="ybLabel" data-k="clip">Label above the title<input id="ybLabel" type="text" autocomplete="off" placeholder="Studio · 2024"></label>' +
     '<label class="yb-f" for="ybChip" data-k="card">Type label<input id="ybChip" type="text" autocomplete="off" placeholder="Card strategy · prototype"></label>' +
     '<label class="yb-f" for="ybDesc">Description<textarea id="ybDesc" rows="2"></textarea></label>' +
+    '<label class="yb-f" for="ybDrive" data-k="clip">Video · Google Drive link<input id="ybDrive" type="url" autocomplete="off" placeholder="https://drive.google.com/file/d/…/view">' +
+      '<span class="yb-hint">In Drive: Share → General access: Anyone with the link → Copy link. Claude turns it into a video that plays inside the phone.</span>' +
+      '<span class="yb-hint yb-state" id="ybDriveState"></span></label>' +
     '<label class="yb-f" for="ybHref" data-k="tile">Link<input id="ybHref" type="url" autocomplete="off" placeholder="https://apps.apple.com/app/…"><span class="yb-hint">Store page or any https:// address. Leave empty for no link.</span></label>' +
     '<div class="yb-f" data-k="card"><span>Links</span><div class="yb-links" id="ybLinks"></div><button type="button" class="yb-btn yb-small" data-act="addlink">+ Add link</button></div>' +
-    '<fieldset class="yb-f"><legend>Shown under these filters</legend><div class="yb-tags" id="ybTags"></div></fieldset>' +
-    '<p class="yb-err" data-k="err"></p>' +
+    '<fieldset class="yb-f" data-k="card tile"><legend>Shown under these filters</legend><div class="yb-tags" id="ybTags"></div></fieldset>' +
+    '<p class="yb-err" id="ybPanelErr"></p>' +
     '<div class="yb-row"><button type="button" class="yb-btn yb-danger" data-act="delete">Remove game</button><span class="yb-sp"></span>' +
     '<button type="button" class="yb-btn" data-act="cancel">Cancel</button><button type="button" class="yb-btn yb-primary" data-act="apply">Apply</button></div></div>');
   panel.addEventListener('click', function (e) {
@@ -470,15 +533,20 @@ function addLinkRow(l, focus) {
 function openPanel(ctx) {
   if (!panel) buildPanel();
   closePop();
-  var kind = ctx.el ? (ctx.el.classList.contains('gcard') ? 'card' : 'tile') : ctx.kind;
-  var m = ctx.el ? (kind === 'card' ? readCard(ctx.el) : readTile(ctx.el))
-    : { kind: kind, studio: '', name: '', chip: '', chipTr: null, desc: '', descTr: null, href: '', links: [], tags: [] };
+  var kind = ctx.el ? (ctx.el.classList.contains('gcard') ? 'card' : ctx.el.classList.contains('clip') ? 'clip' : 'tile') : ctx.kind;
+  var m = ctx.el ? (kind === 'card' ? readCard(ctx.el) : kind === 'clip' ? readClip(ctx.el) : readTile(ctx.el))
+    : { kind: kind, id: '', studio: '', name: '', label: '', chip: '', chipTr: null, desc: '', descTr: null, href: '', links: [], tags: [], video: '', drive: '', pending: false };
   panelCtx = { kind: kind, el: ctx.el || null, container: ctx.container || null, model: m };
-  $('#ybPanelT', panel).textContent = ctx.el ? 'Edit game' : (kind === 'card' ? 'Add featured game' : 'Add game');
-  $$('[data-k="card"]', panel).forEach(function (r) { r.hidden = kind !== 'card'; });
-  $$('[data-k="tile"]', panel).forEach(function (r) { r.hidden = kind !== 'tile'; });
+  var what = kind === 'clip' ? 'clip' : 'game';
+  $('#ybPanelT', panel).textContent = ctx.el ? 'Edit ' + what : (kind === 'card' ? 'Add featured game' : 'Add ' + what);
+  $$('[data-k]', panel).forEach(function (r) { r.hidden = r.getAttribute('data-k').split(' ').indexOf(kind) < 0; });
+  $('#ybNameL', panel).textContent = kind === 'clip' ? 'Clip title' : 'Game name';
   $('#ybStudio', panel).value = m.studio || '';
   $('#ybName', panel).value = m.name;
+  $('#ybLabel', panel).value = m.label || '';
+  $('#ybDrive', panel).value = m.drive || '';
+  $('#ybDriveState', panel).textContent = kind !== 'clip' ? '' : m.pending ? 'Waiting for Claude to turn this link into a video.'
+    : (m.video ? (m.drive ? 'This link is already playing in the phone. A new link replaces the video.' : 'This clip already has a video. A Drive link replaces it.') : 'No video yet.');
   $('#ybChip', panel).value = m.chip || '';
   $('#ybDesc', panel).value = m.desc;
   $('#ybDesc', panel).rows = kind === 'card' ? 5 : 2;
@@ -492,8 +560,8 @@ function openPanel(ctx) {
     lab.querySelector('input').checked = m.tags.indexOf(c.id) >= 0;
     tags.appendChild(lab);
   });
-  var del = $('[data-act="delete"]', panel); del.hidden = !ctx.el; delete del.dataset.armed; del.textContent = 'Remove game';
-  $('[data-k="err"]', panel).textContent = '';
+  var del = $('[data-act="delete"]', panel); del.hidden = !ctx.el; delete del.dataset.armed; del.textContent = 'Remove ' + what;
+  $('#ybPanelErr', panel).textContent = '';
   $$('.yb-picked').forEach(function (g) { g.classList.remove('yb-picked'); });
   if (ctx.el) ctx.el.classList.add('yb-picked');
   panel.hidden = false;
@@ -507,14 +575,15 @@ function closePanel() {
 function validUrl(u) { return /^https?:\/\/\S+$/i.test(u) || /^#[\w-]+$/.test(u); }
 function applyPanel() {
   if (!panelCtx) return;
-  var c = panelCtx, old = c.model, err = $('[data-k="err"]', panel);
+  var c = panelCtx, old = c.model, err = $('#ybPanelErr', panel);
   var m = {
     kind: c.kind, studio: oneLine($('#ybStudio', panel).value), name: oneLine($('#ybName', panel).value),
     chip: oneLine($('#ybChip', panel).value), chipTr: old.chipTr, desc: oneLine($('#ybDesc', panel).value), descTr: old.descTr,
     href: $('#ybHref', panel).value.trim(), links: [],
     tags: $$('#ybTags input:checked', panel).map(function (i) { return i.value; })
   };
-  if (!m.name) { err.textContent = 'Add the game’s name.'; $('#ybName', panel).focus(); return; }
+  if (!m.name) { err.textContent = c.kind === 'clip' ? 'Add the clip’s title.' : 'Add the game’s name.'; $('#ybName', panel).focus(); return; }
+  if (c.kind === 'clip') { applyClip(c, old, m, err); return; }
   if (c.kind === 'tile' && m.href && !validUrl(m.href)) { err.textContent = 'Links start with https://'; $('#ybHref', panel).focus(); return; }
   var bad = null;
   $$('.yb-link', panel).forEach(function (row) {
@@ -533,6 +602,21 @@ function applyPanel() {
   closePanel();
 }
 function label0(row) { return oneLine(row.children[0].value) ? 1 : 0; }
+function applyClip(c, old, m, err) {
+  var drive = $('#ybDrive', panel).value.trim();
+  if (drive && /\/folders\//.test(drive)) { err.textContent = 'That is a folder link. Open the video itself in Drive, then Share → Copy link.'; $('#ybDrive', panel).focus(); return; }
+  if (drive && !driveFileId(drive)) { err.textContent = 'Paste the Google Drive link of the video (Share → Copy link).'; $('#ybDrive', panel).focus(); return; }
+  var was = driveFileId(old.drive || ''), now = drive ? driveFileId(drive) : null;
+  var cm = {
+    id: old.id || freeClipId(m.name), name: m.name, label: oneLine($('#ybLabel', panel).value),
+    desc: m.desc, descTr: old.descTr, video: old.video, drive: drive,
+    pending: now ? (now !== was || old.pending) : false
+  };
+  var html = clipHTML(cm);
+  if (c.el) { if (html !== clipHTML(old)) { putGame(html, c.el); gamesChanged(); } }
+  else { putGame(html, null, c.container); gamesChanged(); }
+  closePanel();
+}
 function deleteFromPanel(btn) {
   if (!panelCtx || !panelCtx.el) return;
   if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = 'Click again to remove'; return; }
